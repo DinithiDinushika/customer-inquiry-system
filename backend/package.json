@@ -10,7 +10,8 @@
     "start": "node dist/server.js",
     "db:migrate": "tsx src/db/migrate.ts",
     "db:test": "tsx src/db/test-connection.ts",
-    "test:auth": "NODE_ENV=test tsx src/tests/auth-smoke.ts"
+    "test:auth": "NODE_ENV=test tsx src/tests/auth-smoke.ts",
+    "test:inquiry": "NODE_ENV=test tsx src/tests/inquiry-smoke.ts"
   },
   "keywords": [],
   "author": "",
@@ -21,7 +22,8 @@
     "dotenv": "^18.0.8",
     "express": "^5.3.0",
     "jsonwebtoken": "^9.0.3",
-    "pg": "^8.23.1"
+    "pg": "^8.23.1",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",

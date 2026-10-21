@@ -3,6 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import { testConnection } from './config/db.js';
 import authRoutes from './routes/authRoutes.js';
+import inquiryRoutes from './routes/inquiryRoutes.js';
 
 dotenv.config();
 
@@ -21,6 +22,7 @@ app.use(express.json());
 
 // Routes
 app.use('/api/auth', authRoutes);
+app.use('/api/inquiries', inquiryRoutes);
 
 // Root Route
 app.get('/', (req: Request, res: Response) => {
