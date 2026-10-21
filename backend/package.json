@@ -9,7 +9,8 @@
     "build": "tsc",
     "start": "node dist/server.js",
     "db:migrate": "tsx src/db/migrate.ts",
-    "db:test": "tsx src/db/test-connection.ts"
+    "db:test": "tsx src/db/test-connection.ts",
+    "test:auth": "NODE_ENV=test tsx src/tests/auth-smoke.ts"
   },
   "keywords": [],
   "author": "",
@@ -19,14 +20,18 @@
     "cors": "^2.8.6",
     "dotenv": "^18.0.8",
     "express": "^5.3.0",
+    "jsonwebtoken": "^9.0.3",
     "pg": "^8.23.1"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
+    "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^26.6.5",
     "@types/pg": "^8.23.1",
+    "@types/supertest": "^7.2.1",
+    "supertest": "^7.3.1",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2"
   }
