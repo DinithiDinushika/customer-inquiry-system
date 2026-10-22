@@ -4,10 +4,11 @@ import {
   InquiryStatus,
   InquiriesFilterParams,
   CreateInquiryInput,
+  InquiryListResponse,
 } from '../types';
 
 export const inquiryService = {
-  getInquiries: async (params?: InquiriesFilterParams): Promise<Inquiry[]> => {
+  getInquiries: async (params?: InquiriesFilterParams): Promise<InquiryListResponse> => {
     const query = new URLSearchParams();
     if (params?.status && params.status !== 'ALL') query.append('status', params.status);
     if (params?.search) query.append('search', params.search);
@@ -15,8 +16,7 @@ export const inquiryService = {
 
     const qs = query.toString();
     const endpoint = `/inquiries${qs ? `?${qs}` : ''}`;
-    const response = await apiClient<{ success: boolean; inquiries: Inquiry[] }>(endpoint);
-    return response.inquiries;
+    return await apiClient<InquiryListResponse>(endpoint);
   },
 
   getInquiryById: async (id: string): Promise<Inquiry> => {

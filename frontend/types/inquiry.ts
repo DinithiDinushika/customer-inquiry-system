@@ -29,3 +29,16 @@ export interface CreateInquiryInput {
   subject: string;
   description: string;
 }
+
+export interface InquiryCounts {
+  all: number;
+  new: number;
+  inProgress: number;
+  resolved: number;
+}
+
+export interface InquiryListResponse {
+  success: boolean;
+  counts: InquiryCounts;
+  inquiries: Inquiry[];
+}

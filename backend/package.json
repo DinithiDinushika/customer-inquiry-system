@@ -11,7 +11,8 @@
     "db:migrate": "tsx src/db/migrate.ts",
     "db:test": "tsx src/db/test-connection.ts",
     "test:auth": "NODE_ENV=test tsx src/tests/auth-smoke.ts",
-    "test:inquiry": "NODE_ENV=test tsx src/tests/inquiry-smoke.ts"
+    "test:inquiry": "NODE_ENV=test tsx src/tests/inquiry-smoke.ts",
+    "test:overview": "NODE_ENV=test tsx src/tests/inquiry-overview-smoke.ts"
   },
   "keywords": [],
   "author": "",
