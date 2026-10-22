@@ -3,10 +3,14 @@ import {
   getInquiries,
   getInquiryById,
   createInquiry,
+  updateInquiryStatus,
 } from '../controllers/inquiryController.js';
 import { requireAuth } from '../middleware/authMiddleware.js';
 import { validateBody } from '../middleware/validateMiddleware.js';
-import { createInquirySchema } from '../schemas/inquirySchemas.js';
+import {
+  createInquirySchema,
+  updateStatusSchema,
+} from '../schemas/inquirySchemas.js';
 
 const router = Router();
 
@@ -22,6 +26,14 @@ router.post(
   requireAuth,
   validateBody(createInquirySchema),
   createInquiry
+);
+
+// PATCH /api/inquiries/:id/status - Move inquiry through lifecycle (with OCC version)
+router.patch(
+  '/:id/status',
+  requireAuth,
+  validateBody(updateStatusSchema),
+  updateInquiryStatus
 );
 
 export default router;

@@ -54,3 +54,10 @@ export const createInquirySchema = z.object({
 });
 
 export type CreateInquiryDTO = z.infer<typeof createInquirySchema>;
+
+export const updateStatusSchema = z.object({
+  status: z.enum(['NEW', 'IN_PROGRESS', 'RESOLVED']),
+  version: z.number().int().min(1),
+});
+
+export type UpdateStatusDTO = z.infer<typeof updateStatusSchema>;

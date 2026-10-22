@@ -1,7 +1,13 @@
 import { Response } from 'express';
 import { AuthenticatedRequest } from '../types/index.js';
 import { query } from '../config/db.js';
-import { CreateInquiryDTO } from '../schemas/inquirySchemas.js';
+import { CreateInquiryDTO, UpdateStatusDTO } from '../schemas/inquirySchemas.js';
+
+const ALLOWED_TRANSITIONS: Record<string, string[]> = {
+  NEW: ['IN_PROGRESS'],
+  IN_PROGRESS: ['RESOLVED', 'NEW'],
+  RESOLVED: ['IN_PROGRESS'],
+};
 
 /**
  * GET /api/inquiries
@@ -272,3 +278,185 @@ export const createInquiry = async (
     });
   }
 };
+
+/**
+ * PATCH /api/inquiries/:id/status
+ * Moves an inquiry through its lifecycle:
+ * NEW -> IN_PROGRESS -> RESOLVED (or back to IN_PROGRESS on reopen).
+ * Enforces state machine rules (422) and OCC version check (409).
+ */
+export const updateInquiryStatus = async (
+  req: AuthenticatedRequest,
+  res: Response
+): Promise<void> => {
+  try {
+    const id = String(req.params.id);
+
+    // Validate UUID format
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+    if (!isUuid) {
+      res.status(400).json({
+        success: false,
+        error: {
+          code: 'INVALID_ID_FORMAT',
+          message: 'The requested inquiry reference format is invalid. Expected a UUID.',
+        },
+      });
+      return;
+    }
+
+    const { status: targetStatus, version: submittedVersion } = req.body as UpdateStatusDTO;
+
+    // 1. Fetch current inquiry
+    const existingResult = await query(
+      `SELECT 
+        id, status, version, assigned_to_id, created_by_id 
+       FROM inquiries 
+       WHERE id = $1;`,
+      [id]
+    );
+
+    if (existingResult.rowCount === 0) {
+      res.status(404).json({
+        success: false,
+        error: {
+          code: 'INQUIRY_NOT_FOUND',
+          message: `Inquiry with reference ID '${id}' was not found.`,
+        },
+      });
+      return;
+    }
+
+    const current = existingResult.rows[0];
+
+    // 2. Validate State Machine Transitions
+    if (current.status === targetStatus) {
+      res.status(422).json({
+        success: false,
+        statusCode: 422,
+        error: {
+          code: 'INVALID_STATUS_TRANSITION',
+          message: `Inquiry is already in '${current.status}' status.`,
+        },
+      });
+      return;
+    }
+
+    const allowed = ALLOWED_TRANSITIONS[current.status] || [];
+    if (!allowed.includes(targetStatus)) {
+      let message = `Cannot transition from ${current.status} to ${targetStatus}.`;
+      if (current.status === 'NEW' && targetStatus === 'RESOLVED') {
+        message = 'Cannot transition directly from NEW to RESOLVED. The inquiry must be IN_PROGRESS first.';
+      } else if (current.status === 'RESOLVED' && targetStatus === 'NEW') {
+        message = 'Cannot transition directly from RESOLVED to NEW. A resolved inquiry must be reopened to IN_PROGRESS first.';
+      }
+
+      res.status(422).json({
+        success: false,
+        statusCode: 422,
+        error: {
+          code: 'INVALID_STATUS_TRANSITION',
+          message,
+        },
+      });
+      return;
+    }
+
+    // 3. Optimistic Concurrency Control (OCC) Check
+    if (current.version !== submittedVersion) {
+      res.status(409).json({
+        success: false,
+        statusCode: 409,
+        error: {
+          code: 'STALE_DATA_CONFLICT',
+          message: 'Update conflict: This inquiry was modified in another session or browser tab. Please reload the latest status.',
+          details: {
+            submittedVersion,
+            currentVersion: current.version,
+            currentStatus: current.status,
+          },
+        },
+      });
+      return;
+    }
+
+    // 4. Execute atomic update with version increment
+    const updateResult = await query(
+      `UPDATE inquiries
+       SET 
+         status = $1::inquiry_status,
+         version = version + 1,
+         updated_at = NOW(),
+         resolved_at = CASE WHEN $1::text = 'RESOLVED' THEN NOW() ELSE NULL END
+       WHERE id = $2 AND version = $3
+       RETURNING 
+         id,
+         customer_name AS "customerName",
+         contact_info AS "contactInfo",
+         subject,
+         description,
+         status,
+         created_by_id AS "createdById",
+         assigned_to_id AS "assignedToId",
+         version,
+         created_at AS "createdAt",
+         updated_at AS "updatedAt",
+         resolved_at AS "resolvedAt";`,
+      [targetStatus, id, submittedVersion]
+    );
+
+    if (updateResult.rowCount === 0) {
+      const latest = await query('SELECT status, version FROM inquiries WHERE id = $1', [id]);
+      res.status(409).json({
+        success: false,
+        statusCode: 409,
+        error: {
+          code: 'STALE_DATA_CONFLICT',
+          message: 'Update conflict: This inquiry was concurrently modified by another session.',
+          details: latest.rows[0] || null,
+        },
+      });
+      return;
+    }
+
+    // Join with names for enriched frontend response
+    const enriched = await query(
+      `SELECT 
+        i.id,
+        i.customer_name AS "customerName",
+        i.contact_info AS "contactInfo",
+        i.subject,
+        i.description,
+        i.status,
+        i.created_by_id AS "createdById",
+        u_creator.full_name AS "createdByName",
+        i.assigned_to_id AS "assignedToId",
+        u_assignee.full_name AS "assignedToName",
+        i.version,
+        i.created_at AS "createdAt",
+        i.updated_at AS "updatedAt",
+        i.resolved_at AS "resolvedAt"
+      FROM inquiries i
+      JOIN users u_creator ON i.created_by_id = u_creator.id
+      LEFT JOIN users u_assignee ON i.assigned_to_id = u_assignee.id
+      WHERE i.id = $1;`,
+      [id]
+    );
+
+    res.json({
+      success: true,
+      message: `Inquiry status successfully updated from ${current.status} to ${targetStatus}.`,
+      inquiry: enriched.rows[0] || updateResult.rows[0],
+    });
+  } catch (error: any) {
+    console.error('Error updating inquiry status:', error);
+    res.status(500).json({
+      success: false,
+      error: {
+        code: 'INTERNAL_SERVER_ERROR',
+        message: 'Failed to update inquiry status.',
+      },
+    });
+  }
+};
+
